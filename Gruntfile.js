@@ -1,46 +1,178 @@
 module.exports = function(grunt) {
+	
+	//cfg of stock tasks
+	grunt.initConfig({
 
-    'use strict';
+		copy: {
+			build: {
+				cwd: 'src',
+				src: ['**', '!markup/**', '!styles/**'],
+				dest: 'dist',
+				expand:true,
+				dot:true
+			}
+		},
 
-    function loadConfig(path) {
-        var glob = require('glob');
-        var object = {};
-        var key;
+		frontmatter: {
+			build: {
+				options: {
+					minify: false,
+					width:60
+				},
+				files: {
+					'src/markup/yaml.json': ['src/markup/pages/*.pug']
+				}
+			}
+		},
 
-        glob.sync('*', {
-            cwd: path
-        }).forEach(function(option) {
-            key = option.replace(/\.js$/, '');
-            object[key] = require(path + option);
-        });
+		pug: {
+			build: {
+				options: {
+					pretty:true,
+					debug:false,
+					basedir: 'src/markup',
+					data: function(dest,src) {
 
-        return object;
-    }
+						//read json made by frontmatter task - concats all yaml into one file
 
-    var os = require('os'),
-        _ = require('lodash');
+						var fs = require('fs');
+						var yaml = JSON.parse(fs.readFileSync('src/markup/yaml.json','utf8'));
 
-    // console.log('cacheDir: ' + os.tmpdir());
+						//get filename of current pug page currently being compiled
 
-    var ip = _.chain(require('os').networkInterfaces()).flatten().filter(function(val) {
-        return (val.family === 'IPv4' && val.internal === false);
-    }).pluck('address').first().value();
+						var filename = src[0].replace('src/markup/pages/', '').replace('.pug', '').split('/').pop();
 
-    var cfg = {
-        pkg: grunt.file.readJSON('package.json'),
-        ip: ip
-    };
+						//loop through json of all page YAMLs to find the one page YAML that matches the pug page currently being compiled
 
-    grunt.util._.extend(cfg, loadConfig('./tasks/options/'));
+						var pageYAML = null;
 
-    require('load-grunt-tasks')(grunt, {
-        pattern: ['grunt-*'],
-        config: './package.json',
-        scope: 'devDependencies'
-    });
+						for(object in yaml) {
+							if(yaml[object]['section'] === filename) {
+								pageYAML = yaml[object];
+							}
+						}
 
-    grunt.loadTasks('tasks');
+						//return the pageYAML found above
 
-    grunt.initConfig(cfg);
+						return {
+							from: src,
+							to: dest,
+							page: pageYAML
+						};
+					}
+				},
+				files: [{
+					cwd: 'src/markup/pages',
+					dest: 'dist/',
+					src: ['**/*.pug'],
+					expand:true,
+					filter: 'isFile',
+					ext: '.html'
+				}]
+			}
+		},
 
+		sass: {
+			build: {
+		        options: {
+		            style: 'expanded',
+		            sourceMap: true
+		        },
+		        // files: [{
+		        //     expand: true,
+		        //     src: ['**/*.scss', '!**/_*.scss'],
+		        //     cwd: 'src/styles',
+		        //     dest: 'dist/css',
+		        //     ext: '.css'
+		        // }]
+		        files: {
+		        	'dist/css/styles.css' : 'src/styles/styles.scss'
+		        }
+		    }
+		},
+
+		clean: {
+			build: {
+				src: ['dist']
+			}
+		},
+
+		autoprefixer: {
+			build: {
+				expand:true,
+				cwd: 'dist',
+				src: ['**/*.css'],
+				dest: 'dist'
+			}
+		},
+
+		watch: {
+		    options: {
+		        dot: true,
+		        interrupt: false,
+		        livereload: true,
+		        livereloadOnError: false,
+		        spawn: false
+		    },
+		    markup: {
+		        files: ['src/markup/**/*.pug', '!src/markup/pages/**/*.pug'],
+		        tasks: ['markup:build']
+		    },
+		    markup_pages: {
+		        files: ['src/markup/pages/**/*.pug'],
+		        tasks: ['markup:watch']
+		    },
+		    styles: {
+		        files: ['src/styles/**/*.scss'],
+		        tasks: ['styles:build']
+		    },
+		    data: {
+		    	files: ['src/data/**'],
+		    	tasks: ['data:watch']
+		    },
+		    js: {
+		    	files: ['src/js/**'],
+		    	tasks: ['newer:copy']
+		    }
+		},
+
+		connect: {
+			build: {
+				options: {
+				    hostname: '*',
+				    // hostname: '<%= grunt.config.get("ip") %>',
+				    port: 3000,
+				    base: 'dist/',
+				    target: 'http://localhost:3000',
+				    appName: 'open',
+				    open: true,
+				    livereload: true
+				}
+			}
+		}
+
+	});
+
+	//loading of stock tasks
+	grunt.loadNpmTasks('grunt-contrib-copy');
+	grunt.loadNpmTasks('grunt-contrib-pug');
+	grunt.loadNpmTasks('grunt-sass');
+	grunt.loadNpmTasks('grunt-contrib-clean');
+	grunt.loadNpmTasks('grunt-autoprefixer');
+	grunt.loadNpmTasks('grunt-contrib-watch');
+	grunt.loadNpmTasks('grunt-contrib-connect');
+	grunt.loadNpmTasks('grunt-frontmatter');
+	grunt.loadNpmTasks('grunt-newer');
+
+	//defining of custom tasks for CLI use
+	grunt.registerTask('markup:build', ['frontmatter', 'pug']);
+	grunt.registerTask('markup:watch', ['frontmatter', 'newer:pug']);
+
+	grunt.registerTask('styles:build', ['sass', 'autoprefixer']);
+	grunt.registerTask('styles:watch', ['newer:sass', 'newer:autoprefixer']);
+
+	grunt.registerTask('data:watch', ['newer:copy']);
+
+	grunt.registerTask('default','Creates build and serves it for dev purposes', ['clean','copy', 'markup:build', 'styles:build', 'connect', 'watch']);
+	grunt.registerTask('prod','Creates prod build in dist directory', ['clean','copy', 'markup:build', 'styles:build']);
 };

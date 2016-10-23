@@ -1,0 +1,10 @@
+{
+  "chart-tests": {
+    "basename": "chart-tests",
+    "preview": "doctype\nhtml(lang=\"en\")\n\n    head\n        //- set up meta ta"
+  },
+  "index": {
+    "basename": "index",
+    "preview": "doctype\nhtml(lang=\"en\")\n\n    head\n        //- set up meta ta"
+  }
+}
